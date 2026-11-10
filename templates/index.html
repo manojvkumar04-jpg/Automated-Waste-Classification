@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#17295a">
+    <title>Waste Classification · ML Analytics Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar" aria-hidden="true">
+        <a class="brand" href="{{ url_for('home') }}"><span class="brand-mark">↗</span><span>WasteWise</span></a>
+    </aside>
+    <main class="main-content">
+        <header class="dashboard-header">
+            <h1><span class="header-icon" aria-hidden="true">♻</span> Waste Classification</h1>
+            <p>Machine Learning Analytics Dashboard</p>
+        </header>
+        <div class="dashboard-content">
+            <section class="overview-heading">
+                <div><span class="eyebrow">MODEL OVERVIEW</span><h2>Material Overview</h2></div>
+                <span class="model-status {% if model_ready %}ready{% else %}offline{% endif %}"><i></i>{% if model_ready %}Classifier ready{% else %}Model unavailable{% endif %}</span>
+            </section>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}<div class="messages">{% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+            {% endwith %}
+
+            {% set top = namespace(name='Cardboard', count=-1) %}
+            {% for category in ['cardboard','glass','metal','paper','plastic','trash'] %}
+                {% if category_counts[category] > top.count %}{% set top.name = display_names[category] %}{% set top.count = category_counts[category] %}{% endif %}
+            {% endfor %}
+            {% set top_share = (top.count / (total_classified if total_classified else 1) * 100) %}
+            <section class="stats-grid" aria-label="Classification summary">
+                <article class="stat-card blue"><span class="stat-label">TOTAL IMAGES</span><strong>{{ total_uploaded }}</strong><small>Uploaded for analysis</small></article>
+                <article class="stat-card red"><span class="stat-label">CLASSIFIED</span><strong>{{ total_classified }}</strong><small>Successful predictions</small></article>
+                <article class="stat-card green"><span class="stat-label">MATERIAL TYPES</span><strong>6</strong><small>Recognized by the model</small></article>
+                <article class="stat-card orange"><span class="stat-label">LEADING MATERIAL</span><strong class="top-material">{{ top.name }}</strong><small>{{ '%.1f'|format(top_share) }}% of classified images</small></article>
+            </section>
+
+            <section class="insights-grid">
+                <article class="panel chart-panel">
+                    <div class="panel-heading"><div><span class="eyebrow">MODEL OUTPUT</span><h3>Material Distribution</h3></div></div>
+                    <div class="chart-layout"><div class="donut-wrap"><div class="donut" style="--chart-gradient: {{ chart_gradient }}"><div class="donut-center"><strong>{{ total_classified }}</strong><span>images</span></div></div></div>
+                    <div class="legend">{% for category in ['cardboard','glass','metal','paper','plastic','trash'] %}<div class="legend-row"><span class="legend-label"><i class="category-dot {{ category }}"></i>{{ display_names[category] }}</span><strong>{{ category_counts[category] }}</strong></div>{% endfor %}</div></div>
+                </article>
+                <article class="panel bars-panel">
+                    <div class="panel-heading"><div><span class="eyebrow">PREDICTION COUNTS</span><h3>Material Comparison</h3></div></div>
+                    <div class="bar-list">{% for category in ['cardboard','glass','metal','paper','plastic','trash'] %}{% set value = category_counts[category] %}{% set width = (value / (total_classified if total_classified else 1) * 100) %}<div class="bar-item"><div class="bar-meta"><span>{{ display_names[category] }}</span><b>{{ value }}</b></div><div class="bar-track"><div class="bar-fill {{ category }}" style="--bar-width: {{ width }}%"></div></div></div>{% endfor %}</div>
+                </article>
+            </section>
+
+            <section class="panel upload-panel" id="upload"><div class="panel-heading"><div><span class="eyebrow">NEW ANALYSIS</span><h3>Classify Images</h3></div><span class="limit-badge">UP TO 20 IMAGES</span></div>
+                <form method="post" enctype="multipart/form-data" id="upload-form">
+                    <label class="dropzone" for="images"><span class="upload-icon">↑</span><strong>Drop your images here</strong><span>or <u>browse files</u> · JPG, PNG, WEBP and more</span><small>Mix images from all six material categories in one batch</small></label>
+                    <input id="images" type="file" name="images" accept="image/jpeg,image/png,image/webp,image/bmp,image/gif" multiple required hidden>
+                    <div class="upload-bottom"><span id="file-summary">No images selected</span><button class="primary-button" type="submit" {% if not model_ready %}disabled title="The model is unavailable"{% endif %}>Analyze images <span>→</span></button></div>
+                </form>
+            </section>
+
+            {% if predictions %}<section class="results-section"><div class="section-title"><div><span class="eyebrow">LATEST BATCH</span><h3>Image Predictions</h3></div><span class="result-count">{{ predictions|length }} classified</span></div><div class="results-grid">{% for item in predictions %}<article class="result-card"><div class="result-image-wrap"><img src="{{ url_for('static', filename='uploads/' ~ item.image_path) }}" alt="Uploaded image classified as {{ item.display_prediction }}"><span class="image-index">{{ loop.index }}</span></div><div class="result-info"><span class="prediction-tag {{ item.prediction }}"><i class="category-dot {{ item.prediction }}"></i>{{ item.display_prediction }}</span><strong>{{ item.confidence }}<small>%</small></strong><span class="confidence-label">MODEL CONFIDENCE</span><p title="{{ item.filename }}">{{ item.filename }}</p></div></article>{% endfor %}</div></section>{% endif %}
+            <footer>WasteWise <span>·</span> Machine learning material recognition</footer>
+        </div>
+    </main>
+</div>
+<script>
+const imageInput=document.getElementById('images');const dropzone=document.querySelector('.dropzone');const summary=document.getElementById('file-summary');imageInput.addEventListener('change',()=>{summary.textContent=imageInput.files.length?`${imageInput.files.length} image${imageInput.files.length===1?'':'s'} selected`:'No images selected'});['dragenter','dragover'].forEach(type=>dropzone.addEventListener(type,event=>{event.preventDefault();dropzone.classList.add('dragging')}));['dragleave','drop'].forEach(type=>dropzone.addEventListener(type,event=>{event.preventDefault();dropzone.classList.remove('dragging')}));dropzone.addEventListener('drop',event=>{if(event.dataTransfer.files.length){imageInput.files=event.dataTransfer.files;imageInput.dispatchEvent(new Event('change'))}});
+</script>
+</body>
+</html>
